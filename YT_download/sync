@@ -1,0 +1,62 @@
+#! /usr/bin/python3
+import sys
+import os
+import io
+import youtube_dl
+from getpass import getpass
+
+from os.path import join as join_file
+from os.path import expanduser as expd_user
+
+CONFIG_FOLDER = join_file(expd_user('~'), '.config', 'ytd')
+CONFIG_FILE = join_file(CONFIG_FOLDER, 'credentials')
+ARCHIVE_FILE = join_file(CONFIG_FOLDER, 'archive')
+
+
+def get_config():
+    '''No args -> list
+       Looks for config details in ~/.config/ytd
+       If present -> return config detials
+       If absent -> take user input and store details'''
+
+    try:
+        username, password, file_format = [line.rstrip()
+                                           for line in open(CONFIG_FILE, 'r')]
+    except IOError:
+        if not os.path.exists(CONFIG_FOLDER):
+            os.makedirs(CONFIG_FOLDER)
+        username = input('Enter Google username: ')
+        password = getpass()
+        file_format = input('Enter music format (Eg: mp3)').lower()
+        with open(CONFIG_FILE, 'w') as f:
+            f.write(username + "\n")
+            f.write(password + "\n")
+            f.write(file_format)
+    return [username, password, file_format]
+
+
+def get_param(username, password, file_format):
+    '''Return param dict for youtube-dl'''
+
+    opt_param = {
+        'username': username,
+        'password': password,
+        'download_archive': ARCHIVE_FILE,
+        'format': 'bestaudio',
+    }
+    return opt_param
+
+
+if __name__ == "__main__":
+    config = get_config()
+    opt_param = get_param(*config)
+
+    print("Syncing Watch Later Playlist")
+    old_stdout = sys.stdout
+    sys.stdout = io.StringIO()
+
+    with youtube_dl.YoutubeDL(opt_param) as ydl:
+        ydl.download(['https://www.youtube.com/playlist?list=WL'])
+
+    sys.stdout = old_stdout
+    print('Download complete')
