@@ -1,0 +1,19 @@
+#! /usr/bin/python3
+
+import sys
+
+with open('/etc/hosts', 'r') as f:
+    list_ip = f.readlines()
+
+prefix_tag = '127.0.0.1 '
+
+for x in range(1, len(sys.argv)):
+    if sys.argv[x][:4] != 'www.':
+        sys.argv[x] = 'www.' + sys.argv[x]
+    sys.argv[x] = prefix_tag + sys.argv[x] + "\n"
+    print(sys.argv[x])
+    if sys.argv[x] in list_ip:
+        list_ip.remove(sys.argv[x])
+
+with open('/etc/hosts', 'w') as f:
+    f.write("".join(list_ip))
