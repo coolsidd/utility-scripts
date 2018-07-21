@@ -28,7 +28,7 @@ ws = wb.active
 
 print("initial cleaning")
 
-for i in progressbar.iter(1, ws.max_row+1):
+for i in progressbar.iterable(1, ws.max_row+1):
     for k in range(1, 12):
         if ws.cell(i, k).value is None:
             ws.cell(i, k).value = ws.cell(i-1, k).value
@@ -61,7 +61,7 @@ with open("timetable_data.csv", "w") as csvfile:
     LPUregex = re.compile(r"(\d+)")
     instructorRegex = re.compile(r"^(.*)\((.*)\)$")
     hoursRegex = re.compile(r"(\d)")
-    for i in progressbar.iter(1, ws.max_row+1):
+    for i in progressbar.iterable(1, ws.max_row+1):
         if last_code != ws.cell(i, 2).value:
             last_code = ws.cell(i, 2).value
             last_sub_name = ws.cell(i, 3).value
