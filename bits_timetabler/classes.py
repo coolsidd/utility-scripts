@@ -1,3 +1,4 @@
+#! /usr/bin/python
 import sys
 import ast
 import csv
@@ -228,7 +229,11 @@ class Timetable:
 
 if __name__ == "__main__":
     total_timetables = 1000
-    with open("./timetable_data.csv", "r") as csvData:
+    if len(sys.argv) <= 1:
+        print("Usage {} <path to csv database>".format(__file__))
+        sys.exit(0)
+
+    with open(sys.argv[1], "r") as csvData:
         csvReader = csv.DictReader(csvData)
         print("Loading the csv file into memory")
         print(csvReader.fieldnames)
