@@ -1,4 +1,4 @@
-import itertools
+import sys
 import ast
 import csv
 import string_distance
@@ -7,8 +7,6 @@ import progressbar
 
 
 def select_and_return(k, option="exit"):
-    if not isinstance(k, list):
-        raise TypeError
     while True:
         for i in range(len(k)):
             print("{} {}".format(str(i), str(k[i])))
@@ -60,8 +58,8 @@ class Subject:
         return iter(self.lectures+self.practicals+self.tutorials)
 
     def __str__(self):
-        return "{} {} {}".format(self.comCode, self.courseCode,
-                                 self.courseTitle)
+        return "{:4} {:10} {}".format(self.comCode, self.courseCode,
+                                      self.courseTitle)
 
     def __repr__(self):
         return "Subject: {} {}".format(self.courseCode, self.courseTitle)
@@ -165,6 +163,7 @@ class Section:
         self.instructors = []
         self.days = days
         self.hours = hours
+        self.priority = -1
 
     @classmethod
     def from_dict(cls, dictionary):
@@ -173,7 +172,7 @@ class Section:
                    ast.literal_eval(dictionary["days"]), ast.literal_eval(dictionary["hours"]))
 
     def __repr__(self):
-        return "{} {} {}".format(self.subject, self.sectionNo, self.slotType)
+        return "{:4} {} {}\t".format(str(self.subject), self.sectionNo, self.slotType)+(str(self.priority) if self.priority >= 0 else "")
 
     def add_instructor(self, instuctor):
         if instuctor not in self.instructors:
@@ -194,11 +193,21 @@ class Timetable:
                     continue
                 else:
                     return False
-        self.slots.append(slot)
+        self.slots.append(slot)  # adding the slot to the timetable
         for day in slot.days:
             for hour in slot.hours:
                 self.table[day][hour] = slot
-        return True
+        return self.seems_good()
+
+    def seems_good(self):
+        # Makes sure the time table has a lunch break and no other inconsistencies
+        for day in self.table:
+            if day[2] is None or day[3] is None or day[4] is None:
+                continue
+            else:
+                return False
+        else:
+            return True
 
     @property
     def priority(self):
@@ -212,12 +221,13 @@ class Timetable:
             [self.priority]+[x for x in range(10)])
         for row in self.table:
             csvWriter.writerow(
-                ['']+["{} {}".format(x.subject.courseCode, x.slotType)
+                ['']+["{} {} {}".format(x.subject.courseCode, x.slotType, x.sectionNo)
                       for x in row if x is not None])
         csvWriter.writerow([" " for x in range(6)])
 
 
 if __name__ == "__main__":
+    total_timetables = 1000
     with open("./timetable_data.csv", "r") as csvData:
         csvReader = csv.DictReader(csvData)
         print("Loading the csv file into memory")
@@ -258,14 +268,6 @@ if __name__ == "__main__":
             res = search(key)
             print("Results")
             choice = select_and_return([x for y, x in res])
-            # for i in range(len(res)):
-            #     print(str.join(" ", (str(i), str(res[i][1]))))
-            # match_regex = re.compile(r"^(\-1|\-2|[0-9])$")
-            # matches = None
-            # while matches is None:
-            #     key = input(
-            #         "Enter 0-9 to select -1 to search again -2 to exit\n")
-            #     matches = match_regex.match(key)
             if choice is None:
                 for k in selected_array:
                     if k.selected is False:
@@ -282,18 +284,20 @@ if __name__ == "__main__":
                 return
 
         def generate_timetable(selected_array):
-            # requirements_set = set()  # stores all the requirements for the timetable
             requirements_list = []
+            print("Please assign priority to sections in each subject")
+            print("Higher values of the priority give more preference to that slot")
+            print("Assigning negative values will make the program exlude that section")
             for subject in selected_array:
-                for slot in subject:
+                print("Subject {}".format(str(subject)))
+                slot = select_and_return(list(subject))
+                while slot is not None:
                     priority = None
                     print("Priority for {}".format(slot))
                     print("Taken by:")
                     print(*(slot.instructors), sep="\n")
                     print("D {} H {}".format(
                         [x+1 for x in slot.days], [x+1 for x in slot.hours]))
-                    # requirements_set.add("{} {}".format(
-                    #     slot.subject.courseCode, slot.slotType))
                     while True:
                         priority = input(
                             """Number (Higher means better,negative values means never) """)
@@ -306,48 +310,77 @@ if __name__ == "__main__":
                             except ValueError:
                                 continue
                     slot.priority = priority
-
+                    slot = select_and_return(list(subject))
                 requirements_list.append(subject.lectures)
                 requirements_list.append(subject.tutorials)
                 requirements_list.append(subject.practicals)
-
-            print("Generating Timetables")
-            timetable_list = []
-            for subjects in selected_array:
-                print(subject)
             while True:
                 try:
                     requirements_list.remove([])
                 except ValueError:
                     break
-            length = 1
-            for k in requirements_list:
-                length *= len(k)
-
-            print("Total requirements (LPU) = {}".format(len(requirements_list)))
+            tree_size = 1
             for x in requirements_list:
+                tree_size *= len(x)
                 print("{} {}".format(x[0].subject.courseCode, x[0].slotType))
+                x.sort(key=lambda my_list: my_list.priority, reverse=True)
+            print("Total requirements (LPU) = {}".format(len(requirements_list)))
+            print("Tree size ~ {}".format(tree_size))
+            print("Sorting Tree")
+            tree_traverser = [tuple(0 for x in requirements_list)]
+            print("Generating best {} Timetables".format(total_timetables))
 
-            print("Tree size ~ {}".format(length))
-            loading_bar = progressbar.ProgressBar()
-            count = 0
-            for combination in itertools.product(*requirements_list):
+            # For more info on how the timetables are generated google X+Y problem
+            # and this stackexchange answer https://cs.stackexchange.com/questions/46910/efficiently-finding-k-smallest-elements-of-cartesian-product
+
+            my_bar = progressbar.ProgressBar()
+            # for i in progressbar.iterable(total_timetables):
+            threshold = 1000000
+            break_loop_after_iter = 0
+            while len(timetable_list) < total_timetables:
+                if break_loop_after_iter <= 0:
+                    my_bar.__exit__()
+                    print(
+                        "Even after trying for 1 million iterations, we could not generate adequate amount of timetables...")
+                    print("Giving up now :(")
+                    print("Hopefully dtc will help ;P")
+                    break
+                break_loop_after_iter += 1
+                tree_traverser.sort(key=lambda t: sum(
+                    requirements_list[p][t[p]].priority for p in range(len(t))),
+                    reverse=True)
+
                 timetable = Timetable()
-                fine = True
-                for slot in combination:
-                    if timetable.add_slot(slot) is not None:
+                try:
+                    last = tree_traverser.pop(0)
+                except IndexError:
+                    break_loop_after_iter = threshold
+                    continue
+                for i in range(len(requirements_list)):
+                    # Try attemting to build the timetable
+                    if timetable.add_slot(requirements_list[i][last[i]]):
                         continue
+                    # In case the timetable fails (clashes by overlapping slots etc) discard that timetable
                     else:
-                        fine = False
                         break
-                if fine:
+                else:
                     timetable_list.append(timetable)
-                count += 1
-                loading_bar.fraction(count/length)
+                for k in range(len(last)):
+                    tree_traverser.append(
+                        tuple(last[p] if (p != k) or ((last[p]+1) >= len(requirements_list[k])) else last[p]+1 for p in range(len(last))))
 
-            print("Generated {} timetables!!".format(len(timetable_list)))
-            print("Sorting according to priority")
-            timetable_list.sort(key=lambda table: table.priority, reverse=True)
+                # Remove duplicates
+                tree_traverser = list(set(tree_traverser))
+                while True:
+                    try:
+                        tree_traverser.remove(last)
+                    except ValueError:
+                        break
+                # Update loading bar
+                my_bar.fraction(
+                    max(len(timetable_list)/total_timetables, break_loop_after_iter/threshold))
+            else:
+                my_bar.__exit__()
             return timetable_list
 
         for row in csvReader:   # Loads the data from the csvFile
@@ -411,6 +444,6 @@ if __name__ == "__main__":
         location = input("Enter name ")
         with open(location+".csv", "w") as csvFile:
             writer = csv.writer(csvFile)
-            for table in timetable_list[:100]:
+            for table in timetable_list:
                 table.write_into_csv(writer)
         print("Thanks for using bits-timetabler!!:]")
